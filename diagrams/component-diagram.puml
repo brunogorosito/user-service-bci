@@ -1,0 +1,101 @@
+@startuml
+title Diagrama de Componentes - User Service
+
+rectangle "User Service Application" {
+
+    rectangle "Presentation Layer" {
+        component UserController
+        component GlobalExceptionHandler
+    }
+
+    rectangle "Business Layer" {
+        component UserService
+        component JwtService
+    }
+
+    rectangle "Data Layer" {
+        component UserRepository
+    }
+
+    rectangle "Security Layer" {
+        component SecurityConfig
+        component PasswordEncoder
+    }
+
+    rectangle "DTOs" {
+        component UserSignUpRequest
+        component UserResponse
+        component ErrorResponse
+        component PhoneDto
+    }
+
+    rectangle "Entities" {
+        component User
+        component Phone
+    }
+
+    rectangle "Exceptions" {
+        component UserAlreadyExistsException
+        component UserNotFoundException
+        component InvalidTokenException
+    }
+}
+
+database "H2 Database" {
+    storage "users table"
+    storage "phones table"
+}
+
+cloud "JWT Token"
+actor Client
+
+Client --> UserController : HTTP Requests
+UserController --> UserService : Business calls
+UserController --> UserSignUpRequest : receives
+UserController --> UserResponse : returns
+UserController --> ErrorResponse : error response
+
+UserService --> UserRepository : data access
+UserService --> JwtService : token operations
+UserService --> PasswordEncoder : password encoding
+UserService --> User : entity management
+UserService --> UserAlreadyExistsException : throws
+UserService --> UserNotFoundException : throws
+UserService --> InvalidTokenException : throws
+
+UserRepository --> "H2 Database" : JPA operations
+UserRepository --> User : entity mapping
+User --> Phone : One-to-Many
+
+JwtService --> "JWT Token" : generates/validates
+
+SecurityConfig --> PasswordEncoder : configures
+
+GlobalExceptionHandler --> UserAlreadyExistsException : handles
+GlobalExceptionHandler --> UserNotFoundException : handles
+GlobalExceptionHandler --> InvalidTokenException : handles
+GlobalExceptionHandler --> ErrorResponse : creates
+
+UserSignUpRequest --> PhoneDto : contains
+UserResponse --> PhoneDto : contains
+
+note right of UserController
+  Endpoints:
+  - POST /sign-up
+  - GET /login
+end note
+
+note right of UserService
+  Business Logic:
+  - User registration
+  - User authentication
+  - Token management
+end note
+
+note right of UserRepository
+  Data Access:
+  - CRUD operations
+  - Email validation
+  - User queries
+end note
+@enduml

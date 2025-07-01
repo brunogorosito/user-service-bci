@@ -1,0 +1,52 @@
+@startuml
+title Diagrama de Secuencia - User Sign Up
+
+actor Client
+participant UserController
+participant UserService
+participant UserRepository
+participant PasswordEncoder
+participant JwtService
+database H2Database
+
+Client -> UserController: POST /sign-up\n{name, email, password, phones}
+activate UserController
+
+UserController -> UserController: Validate request
+UserController -> UserService: signUp(request)
+activate UserService
+
+UserService -> UserRepository: findByEmail(email)
+activate UserRepository
+UserRepository -> H2Database: SELECT FROM users WHERE email = ?
+H2Database --> UserRepository: Optional.empty()
+UserRepository --> UserService: Optional.empty()
+deactivate UserRepository
+
+UserService -> PasswordEncoder: encode(password)
+activate PasswordEncoder
+PasswordEncoder --> UserService: encodedPassword
+deactivate PasswordEncoder
+
+UserService -> UserService: Create User entity\nGenerate UUID, timestamps
+
+UserService -> JwtService: generateToken(email)
+activate JwtService
+JwtService --> UserService: JWT token
+deactivate JwtService
+
+UserService -> UserRepository: save(user)
+activate UserRepository
+UserRepository -> H2Database: INSERT INTO users, phones
+H2Database --> UserRepository: saved entities
+UserRepository --> UserService: saved user
+deactivate UserRepository
+
+UserService -> UserService: Convert to UserResponse
+UserService --> UserController: UserResponse
+deactivate UserService
+
+UserController --> Client: 201 Created\nUserResponse with token
+deactivate UserController
+
+@enduml

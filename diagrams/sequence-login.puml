@@ -1,0 +1,56 @@
+@startuml
+title Diagrama de Secuencia - User Login
+
+actor Client
+participant UserController
+participant UserService
+participant JwtService
+participant UserRepository
+database H2Database
+
+Client -> UserController: GET /login\nAuthorization: Bearer <token>
+activate UserController
+
+UserController -> UserController: Extract token from header
+UserController -> UserService: login(token)
+activate UserService
+
+UserService -> JwtService: isTokenValid(token)
+activate JwtService
+JwtService --> UserService: true
+deactivate JwtService
+
+UserService -> JwtService: getEmailFromToken(token)
+activate JwtService
+JwtService --> UserService: email
+deactivate JwtService
+
+UserService -> UserRepository: findByEmail(email)
+activate UserRepository
+UserRepository -> H2Database: SELECT FROM users WHERE email = ?
+H2Database --> UserRepository: User entity
+UserRepository --> UserService: User entity
+deactivate UserRepository
+
+UserService -> UserService: Update lastLogin = now()
+
+UserService -> JwtService: generateToken(email)
+activate JwtService
+JwtService --> UserService: new JWT token
+deactivate JwtService
+
+UserService -> UserRepository: save(user)
+activate UserRepository
+UserRepository -> H2Database: UPDATE users SET lastLogin, token
+H2Database --> UserRepository: updated user
+UserRepository --> UserService: updated user
+deactivate UserRepository
+
+UserService -> UserService: Convert to UserResponse
+UserService --> UserController: UserResponse
+deactivate UserService
+
+UserController --> Client: 200 OK\nUserResponse with new token
+deactivate UserController
+
+@enduml
