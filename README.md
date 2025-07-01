@@ -326,8 +326,8 @@ ENTRYPOINT ["java", "-jar", "/app.jar"]
 - Agregar métricas y monitoreo
 
 ## 👥 Autor
-- **Desarrollador:** [Tu Nombre]
-- **Email:** [tu.email@domain.com]
+- **Desarrollador:** Bruno Joaquín Gorosito
+- **Email:** gorositobruno1@gmail.com
 - **Fecha:** Julio 2025
 
 ## 📄 Licencia
