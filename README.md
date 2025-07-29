@@ -94,7 +94,7 @@ Crea un nuevo usuario en el sistema.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8080/sign-up \
+curl -X POST http://localhost:8080/users/sign-up \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Juan Pérez",
@@ -136,7 +136,7 @@ Consulta la información del usuario autenticado.
 
 **Request:**
 ```bash
-curl -X GET http://localhost:8080/login \
+curl -X GET http://localhost:8080/users/login \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
 ```
 
