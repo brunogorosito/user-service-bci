@@ -1,61 +1,137 @@
+// build.gradle CORREGIDO
 plugins {
 	id 'org.springframework.boot' version '2.5.14'
 	id 'io.spring.dependency-management' version '1.0.11.RELEASE'
 	id 'java'
+	id 'groovy'
 	id 'jacoco'
 }
 
 group = 'com.bci'
 version = '1.0.0'
-sourceCompatibility = '11'
+java.sourceCompatibility = JavaVersion.VERSION_11
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
 
 repositories {
 	mavenCentral()
 }
 
 dependencies {
+	// Spring Boot Starters
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
-	implementation 'io.jsonwebtoken:jjwt-api:0.11.2'
-	implementation 'io.jsonwebtoken:jjwt-impl:0.11.2'
-	implementation 'io.jsonwebtoken:jjwt-jackson:0.11.2'
 
+	// JWT
+	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+
+	// Database
 	runtimeOnly 'com.h2database:h2'
 
+	// Test Dependencies
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'
-	testImplementation 'org.spockframework:spock-core:2.0-groovy-3.0'
-	testImplementation 'org.spockframework:spock-spring:2.0-groovy-3.0'
-	testImplementation 'org.codehaus.groovy:groovy-all:3.0.8'
+
+	// Spock Framework
+	testImplementation platform('org.spockframework:spock-bom:2.1-groovy-3.0')
+	testImplementation 'org.spockframework:spock-core'
+	testImplementation 'org.spockframework:spock-spring'
+
+	// Groovy (necesario para Spock)
+	testImplementation 'org.codehaus.groovy:groovy:3.0.13'
+
+	// Annotation Processor
+	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 }
 
+// Configuración de sourceSets para Spock
+sourceSets {
+	test {
+		groovy {
+			srcDirs = ['src/test/groovy']
+		}
+		java {
+			srcDirs = ['src/test/java']
+		}
+		resources {
+			srcDirs = ['src/test/resources']
+		}
+	}
+}
+
+// Configuración de tests
 test {
 	useJUnitPlatform()
+
+	// Incluir tests de Groovy/Spock
+	include '**/*Test.*'
+	include '**/*Spec.*'
+
+	// Configuración JVM
+	jvmArgs '-XX:+UnlockExperimentalVMOptions'
+
+	// Mostrar resultados
+	testLogging {
+		events "passed", "skipped", "failed"
+		exceptionFormat "full"
+	}
+
+	// Ejecutar JaCoCo después
 	finalizedBy jacocoTestReport
 }
 
+// Configuración JaCoCo
 jacoco {
 	toolVersion = "0.8.7"
 }
 
 jacocoTestReport {
 	dependsOn test
+
 	reports {
-		xml.enabled false
-		csv.enabled false
-		html.destination file("${buildDir}/jacocoHtml")
+		xml.required = true
+		csv.required = false
+		html.required = true
+		html.outputLocation = layout.buildDirectory.dir('jacocoHtml')
 	}
+
+	// Incluir todas las clases compiladas
 	executionData fileTree(project.rootDir.absolutePath).include("**/build/jacoco/*.exec")
 }
 
 jacocoTestCoverageVerification {
+	dependsOn jacocoTestReport
+
 	violationRules {
 		rule {
 			limit {
 				minimum = 0.80
 			}
 		}
+	}
+}
+
+// Task personalizado para generar reporte y verificar cobertura
+task testWithCoverage {
+	dependsOn test
+	dependsOn jacocoTestReport
+	dependsOn jacocoTestCoverageVerification
+
+	jacocoTestReport.mustRunAfter test
+	jacocoTestCoverageVerification.mustRunAfter jacocoTestReport
+}
+
+// Configuración para evitar warnings de Gradle
+gradle.projectsEvaluated {
+	tasks.withType(JavaCompile) {
+		options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
 	}
 }

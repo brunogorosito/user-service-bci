@@ -1,4 +1,3 @@
-// UserServiceTest.groovy
 package com.bci.userservice.service
 
 import com.bci.userservice.dto.UserSignUpRequest

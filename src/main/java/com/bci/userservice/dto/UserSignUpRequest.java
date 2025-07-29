@@ -14,7 +14,7 @@ public class UserSignUpRequest {
     private String email;
 
     @NotBlank(message = "Password es requerido")
-    @Pattern(regexp = "^(?=.*[A-Z])(?=.*\\d.*\\d)[a-zA-Z\\d]{8,12}$",
+    @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d.*\\d)[a-zA-Z\\d]{8,12}$",
             message = "Password debe tener una mayúscula, dos números, solo letras y números, entre 8-12 caracteres")
     private String password;
 
