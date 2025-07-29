@@ -1,8 +1,10 @@
 package com.bci.userservice.service
 
+import com.bci.userservice.dto.PhoneDto
 import com.bci.userservice.dto.UserSignUpRequest
 import com.bci.userservice.dto.UserResponse
 import com.bci.userservice.entity.User
+import com.bci.userservice.entity.Phone
 import com.bci.userservice.exception.UserAlreadyExistsException
 import com.bci.userservice.exception.InvalidTokenException
 import com.bci.userservice.exception.UserNotFoundException
@@ -43,12 +45,9 @@ class UserServiceTest extends Specification {
         jwtService.generateToken("test@domain.com") >> "jwt-token";
 
         and: "user is saved successfully"
-        def savedUser = new User("Test User", "test@domain.com", "encodedPassword", []);
+        def savedUser = createCompleteUser("Test User", "test@domain.com", "encodedPassword")
         savedUser.id = "test-uuid";
         savedUser.token = "jwt-token";
-        savedUser.created = LocalDateTime.now();
-        savedUser.lastLogin = LocalDateTime.now();
-        savedUser.isActive = true;
         userRepository.save(_ as User) >> savedUser;
 
         when: "signing up the user"
@@ -70,7 +69,7 @@ class UserServiceTest extends Specification {
         request.password = "a2asfGfdfdf4";
 
         and: "user already exists in database"
-        def existingUser = new User();
+        def existingUser = createCompleteUser("Existing", "existing@domain.com", "pass")
         userRepository.findByEmail("existing@domain.com") >> Optional.of(existingUser);
 
         when: "trying to sign up existing user"
@@ -95,7 +94,7 @@ class UserServiceTest extends Specification {
         jwtService.getEmailFromToken(token) >> Optional.of(userEmail);
 
         and: "user exists in database"
-        def existingUser = new User("Test User", userEmail, "encodedPassword", []);
+        def existingUser = createCompleteUser("Test User", userEmail, "encodedPassword")
         existingUser.id = "test-uuid";
         existingUser.created = LocalDateTime.now().minusDays(1);
         existingUser.lastLogin = LocalDateTime.now().minusHours(1);
@@ -180,5 +179,216 @@ class UserServiceTest extends Specification {
         and: "should not interact with repository"
         0 * userRepository.findByEmail(_);
         0 * userRepository.save(_);
+    }
+
+    // NUEVOS TESTS PARA MEJORAR COVERAGE:
+
+    def "should update lastLogin timestamp on successful login"() {
+        given: "a valid token and existing user"
+        def token = "valid-token"
+        def email = "test@domain.com"
+        def originalLastLogin = LocalDateTime.now().minusHours(2)
+
+        def existingUser = createCompleteUser("Test User", email, "hashedPassword")
+        existingUser.id = "test-uuid"
+        existingUser.lastLogin = originalLastLogin
+        existingUser.isActive = true
+
+        jwtService.isTokenValid(token) >> true
+        jwtService.getEmailFromToken(token) >> Optional.of(email)
+        userRepository.findByEmail(email) >> Optional.of(existingUser)
+        jwtService.generateToken(email) >> "new-token"
+
+        // Mock más simple para save()
+        userRepository.save(_ as User) >> { User user ->
+            user.lastLogin = LocalDateTime.now()
+            return user
+        }
+
+        when: "logging in"
+        def result = userService.login(token)
+
+        then: "should return result with updated login time"
+        result != null
+        result.email == email
+        result.lastLogin.isAfter(originalLastLogin)
+    }
+
+    def "should preserve user data during login"() {
+        given: "existing user with complete data"
+        def token = "valid-token"
+        def email = "test@domain.com"
+        def created = LocalDateTime.now().minusDays(1)
+
+        def existingUser = createCompleteUser("Original Name", email, "hashedPass")
+        existingUser.id = "original-id"
+        existingUser.created = created
+        existingUser.isActive = true
+
+        jwtService.isTokenValid(token) >> true
+        jwtService.getEmailFromToken(token) >> Optional.of(email)
+        userRepository.findByEmail(email) >> Optional.of(existingUser)
+        jwtService.generateToken(email) >> "new-token"
+        userRepository.save(_ as User) >> existingUser
+
+        when: "logging in"
+        def result = userService.login(token)
+
+        then: "original data should be preserved"
+        result.name == "Original Name"
+        result.id == "original-id"
+        result.created == created
+        result.isActive == true
+        result.email == email
+    }
+
+    def "should handle user with null phones during login"() {
+        given: "user with null phones"
+        def token = "valid-token"
+        def email = "test@domain.com"
+
+        def existingUser = createCompleteUser("Test User", email, "pass")
+        existingUser.phones = null // Explícitamente null
+
+        jwtService.isTokenValid(token) >> true
+        jwtService.getEmailFromToken(token) >> Optional.of(email)
+        userRepository.findByEmail(email) >> Optional.of(existingUser)
+        jwtService.generateToken(email) >> "new-token"
+        userRepository.save(_ as User) >> existingUser
+
+        when: "logging in"
+        def result = userService.login(token)
+
+        then: "should handle null phones gracefully"
+        result != null
+        // El servicio debería manejar phones null correctamente
+        noExceptionThrown()
+    }
+
+    def "should handle user with empty phones list during login"() {
+        given: "user with empty phones"
+        def token = "valid-token"
+        def email = "test@domain.com"
+
+        def existingUser = createCompleteUser("Test User", email, "pass")
+        existingUser.phones = [] // Lista vacía de Phone entities
+
+        jwtService.isTokenValid(token) >> true
+        jwtService.getEmailFromToken(token) >> Optional.of(email)
+        userRepository.findByEmail(email) >> Optional.of(existingUser)
+        jwtService.generateToken(email) >> "new-token"
+        userRepository.save(_ as User) >> existingUser
+
+        when: "logging in"
+        def result = userService.login(token)
+
+        then: "should handle empty phones gracefully"
+        result != null
+        result.phones != null
+        result.phones.isEmpty()
+    }
+
+    def "should create user with phones successfully"() {
+        given: "a request with phone data"
+        def request = new UserSignUpRequest()
+        request.name = "Test User"
+        request.email = "test@domain.com"
+        request.password = "Password123"
+
+        def phoneDto = new PhoneDto()
+        phoneDto.number = 87654321L
+        phoneDto.citycode = 1
+        phoneDto.contrycode = "57"
+        request.phones = [phoneDto]
+
+        and: "user does not exist"
+        userRepository.findByEmail("test@domain.com") >> Optional.empty()
+
+        and: "services work correctly"
+        passwordEncoder.encode("Password123") >> "encodedPassword"
+        jwtService.generateToken("test@domain.com") >> "jwt-token"
+
+        and: "user is saved with phone entities"
+        def savedUser = createCompleteUser("Test User", "test@domain.com", "encodedPassword")
+        // Crear Phone entity usando tu clase
+        def phoneEntity = new Phone(87654321L, 1, "57", savedUser)
+        savedUser.phones = [phoneEntity]
+        userRepository.save(_ as User) >> savedUser
+
+        when: "signing up"
+        def result = userService.signUp(request)
+
+        then: "user should be created with phones"
+        result != null
+        result.phones != null
+        result.phones.size() == 1
+        result.phones[0].number == 87654321L
+    }
+
+    def "should handle signup with null phones in request"() {
+        given: "a request without phones"
+        def request = new UserSignUpRequest()
+        request.name = "Test User"
+        request.email = "test@domain.com"
+        request.password = "Password123"
+        request.phones = null
+
+        and: "user does not exist"
+        userRepository.findByEmail("test@domain.com") >> Optional.empty()
+
+        and: "services work correctly"
+        passwordEncoder.encode("Password123") >> "encodedPassword"
+        jwtService.generateToken("test@domain.com") >> "jwt-token"
+
+        and: "user is saved without phones"
+        def savedUser = createCompleteUser("Test User", "test@domain.com", "encodedPassword")
+        userRepository.save(_ as User) >> savedUser
+
+        when: "signing up"
+        def result = userService.signUp(request)
+
+        then: "user should be created successfully"
+        result != null
+        noExceptionThrown()
+    }
+
+    def "should handle signup with empty phones list in request"() {
+        given: "a request with empty phones list"
+        def request = new UserSignUpRequest()
+        request.name = "Test User"
+        request.email = "test@domain.com"
+        request.password = "Password123"
+        request.phones = []
+
+        and: "user does not exist"
+        userRepository.findByEmail("test@domain.com") >> Optional.empty()
+
+        and: "services work correctly"
+        passwordEncoder.encode("Password123") >> "encodedPassword"
+        jwtService.generateToken("test@domain.com") >> "jwt-token"
+
+        and: "user is saved without phones"
+        def savedUser = createCompleteUser("Test User", "test@domain.com", "encodedPassword")
+        userRepository.save(_ as User) >> savedUser
+
+        when: "signing up"
+        def result = userService.signUp(request)
+
+        then: "user should be created successfully"
+        result != null
+        noExceptionThrown()
+    }
+
+    // Helper method simplificado
+    private User createCompleteUser(String name, String email, String password) {
+        def user = new User()
+        user.name = name
+        user.email = email
+        user.password = password
+        user.isActive = true
+        user.created = LocalDateTime.now()
+        user.lastLogin = LocalDateTime.now()
+        user.phones = [] // Lista vacía por defecto
+        return user
     }
 }
